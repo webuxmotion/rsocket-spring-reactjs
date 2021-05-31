@@ -120,10 +120,10 @@ class CatalogPage extends React.Component {
 
                             } else {
                               console.log('send message from client', index);
-                              console.log(itemsForPrice[index]);
 
-                              const msg = new MessagePrice(itemsForPrice[index].id);
-                              console.log('itemsForPrice[index].id',itemsForPrice[index].id);
+                              const msg = new MessagePrice((itemsForPrice[index].id + 1) * 2, 'hello');
+                              console.log('msg', msg);
+                              
                               index++;
                               
                               subscriber.onNext(msg);
@@ -135,7 +135,7 @@ class CatalogPage extends React.Component {
                         } else {
                             window.clearInterval(intervalID);
                         }
-                    }, 1000);
+                    }, 10);
                 }
             });
         });

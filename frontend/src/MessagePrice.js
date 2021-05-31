@@ -1,7 +1,8 @@
 export class MessagePrice {
 
-    constructor(productId) {
+    constructor(productId, message) {
         this.productId = productId;
+        this.message = message;
     }
 
     toObject(data) {

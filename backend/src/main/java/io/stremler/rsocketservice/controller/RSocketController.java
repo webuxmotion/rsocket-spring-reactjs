@@ -8,6 +8,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.stereotype.Controller;
 import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 
 import java.time.Duration;
 
@@ -46,13 +47,13 @@ public class RSocketController {
     }
 
     @MessageMapping("price")
-    public Flux<MessagePrice> price(final Flux<MessagePrice> settings) {
+    public Flux<MessagePrice> price(final Flux<MessagePriceRequest> settings) {
         log.info("Received price request");
-        settings.subscribe(message -> log.info("MESSAGE" + message.toString()));
 
-        return Flux.interval(Duration.ofSeconds(3))
+        return settings
+                .interval(Duration.ofMillis(300))
                 .doOnCancel(() -> log.warn("The client cancelled the price."))
-                .map(index -> new MessagePrice(2, 4));
+                .flatMap(message -> Mono.just(new MessagePrice(message, message * 2)));
     }
 
     @MessageMapping("catalog")
