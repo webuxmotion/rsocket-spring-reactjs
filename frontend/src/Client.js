@@ -47,50 +47,11 @@ export class Client {
         });
     }
 
-    requestResponse(message) {
-        return new Promise((resolve, reject) => {
-            this.socket.requestResponse({
-                data: message,
-                metadata: String.fromCharCode('request-response'.length) + 'request-response'
-            }).subscribe({
-                onComplete: msg => {
-                    resolve(new Message().toObject(msg.data))
-                },
-                onError: error => {
-                    reject(error)
-                }
-            });
-        });
-    }
-
-    fireAndForget(message) {
-        return this.socket.fireAndForget({
-            data: message,
-            metadata: String.fromCharCode('fire-and-forget'.length) + 'fire-and-forget'
-        });
-    }
-
-    requestStream(message) {
-        return this.socket.requestStream({
-            data: message,
-            metadata: String.fromCharCode('stream'.length) + 'stream'
-        });
-    }
-
     requestCatalog(message) {
         return this.socket.requestStream({
             data: message,
             metadata: String.fromCharCode('catalog'.length) + 'catalog'
         });
-    }
-
-    requestChannel(flow) {
-        return this.socket.requestChannel(flow.map(msg => {
-            return {
-                data: msg,
-                metadata: String.fromCharCode('channel'.length) + 'channel'
-            };
-        }));
     }
 
     requestPrice(flow) {
@@ -102,12 +63,19 @@ export class Client {
         }));
     }
 
+    requestImage(flow) {
+        return this.socket.requestChannel(flow.map(msg => {
+            return {
+                data: msg,
+                metadata: String.fromCharCode('image'.length) + 'image'
+            };
+        }));
+    }
+
     disconnect() {
         console.log('rsocketclientsocket', this.socket);
         console.log('rsocketclient', this.client);
-        // this.socket.close();
         this.client.close();
-        // this.cancel();
     }
 
 }

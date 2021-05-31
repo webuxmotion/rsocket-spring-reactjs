@@ -1,4 +1,4 @@
-export class MessagePrice {
+export class MessageImage {
 
     constructor(productId, message) {
         this.productId = productId;

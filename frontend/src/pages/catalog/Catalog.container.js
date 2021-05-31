@@ -1,22 +1,25 @@
 import React from "react";
 import { Flowable } from "rsocket-flowable";
+import { connect } from 'react-redux';
 
 import { Client } from "../../Client";
 import { MessageCatalog } from "../../MessageCatalog";
-import { Message } from "../../Message";
+import { MessagePrice } from "../../MessagePrice";
+import { MessageImage } from "../../MessageImage";
+
+import { addPrices, addImages } from '../../redux/productSlice';
 
 import Catalog from './Catalog';
-import { MessagePrice } from "../../MessagePrice";
 
 class CatalogPage extends React.Component {
   requestCatalogSubscription;
   requestPriceClientSubscription;
   requestPriceServerSubscription;
+  requestImageClientSubscription;
+  requestImageServerSubscription;
 
   state = {
     connected: false,
-    catalogInProgress: false,
-    priceInProgress: false,
     handleOnConnect: false,
     address: 'ws://localhost:7000',
     log: '',
@@ -33,7 +36,6 @@ class CatalogPage extends React.Component {
   componentWillUnmount() {
     if (this.state.connected) {
       this.requestCatalogSubscription.cancel();
-      this.setState({ catalogInProgress: false });
     }
   }
 
@@ -54,8 +56,7 @@ class CatalogPage extends React.Component {
   }
 
   handleRequestCatalog() {
-    if(!this.state.catalogInProgress) {
-      let requestedMsg = 10;
+      let requestedMsg = 100;
       let processedMsg = 0;
       let items = [];
       
@@ -65,116 +66,146 @@ class CatalogPage extends React.Component {
         onSubscribe: sub => {
           this.requestCatalogSubscription = sub;
           this.requestCatalogSubscription.request(requestedMsg);
-          this.setState({ catalogInProgress: true });
         },
-        onError: error => {
-            
-        },
+        onError: error => {},
         onNext: msg => {
           items.push(msg.data);
+        
           processedMsg++;
 
           if (processedMsg >= requestedMsg) {
+
             this.setState({
               items: this.state.items.concat(items),
               isLoading: false,
               chunkId: this.state.chunkId + 1
             });
 
-            this.requestCatalogSubscription.cancel();
-            this.setState({ catalogInProgress: false });
-
             this.handleRequestPrice(items);
+
+            setTimeout(() => {
+              this.handleRequestImage(items);
+            }, 10000);
           }
         },
         onComplete: msg => {
           console.log('ON COMPLETE:', msg);
         },
       });
-    } else {
-      this.requestCatalogSubscription.cancel();
-      this.setState({ catalogInProgress: false });
-    }
   }
 
   handleRequestPrice(itemsForPrice) {
-    if(!this.state.priceInProgress) {
-        let index = 0;
-        let requestedMsg = 10;
-        let processedMsg = 0;
-        let cancelled = false;
+    let index = 0;
+    let requestedMsg = itemsForPrice.length;
+    let processedMsg = 0;
+    let cancelled = false;
+    const prices = [];
 
-        let flow = new Flowable(subscriber => {
-            this.requestPriceClientSubscription = subscriber;
-            this.requestPriceClientSubscription.onSubscribe({
-                cancel: () => {
-                    cancelled = true;
-                },
-                request: n => {
-                    console.log('REQUEST CHANNEL: OUTBOUND: ' + n + ' message(s) was/were requested by the server');
+    let flow = new Flowable(subscriber => {
+      this.requestPriceClientSubscription = subscriber;
+      this.requestPriceClientSubscription.onSubscribe({
+        cancel: () => {
+            cancelled = true;
+        },
+        request: n => {
+          let intervalID = setInterval(() => {
+            if (n > 0 && !cancelled) {
 
-                    let intervalID = setInterval(() => {
-                        if (n > 0 && !cancelled) {
+                if (index >= requestedMsg) {
 
-                            if (index >= requestedMsg) {
-
-                            } else {
-                              console.log('send message from client', index);
-
-                              const msg = new MessagePrice((itemsForPrice[index].id + 1) * 2, 'hello');
-                              console.log('msg', msg);
-                              
-                              index++;
-                              
-                              subscriber.onNext(msg);
-  
-                              console.log('REQUEST CHANNEL: OUTBOUND: new message sent: ' + msg.toString());
-                            }
-                            
-                            n--;
-                        } else {
-                            window.clearInterval(intervalID);
-                        }
-                    }, 10);
+                } else {
+                  const msg = new MessagePrice(itemsForPrice[index].id);
+                  index++;
+                  subscriber.onNext(msg);
                 }
-            });
-        });
+                
+                n--;
+            } else {
+                window.clearInterval(intervalID);
+            }
+          }, 10);
+        }
+      });
+    });
 
-        this.client.requestPrice(flow).subscribe({
-            onSubscribe: sub => {
-                console.log('subscribed to price');
-                this.requestPriceServerSubscription = sub;
-                this.requestPriceServerSubscription.request(requestedMsg);
-                console.log('inbound onSubcribe: ' + requestedMsg + ' message(s) was/were requested by the client');
-                this.setState({ priceInProgress: true });
-            },
-            onError: error => {
-                console.log('REQUEST CHANNEL: INBOUND: error occurred:' + JSON.stringify(error));
-            },
-            onNext: msg => {
-                console.log('msg', msg);
-                console.log('REQUEST CHANNEL: INBOUND: new message arrived: ' + new Message().toObject(msg.data).toString());
-                processedMsg++;
+    this.client.requestPrice(flow).subscribe({
+        onSubscribe: sub => {
+            this.requestPriceServerSubscription = sub;
+            this.requestPriceServerSubscription.request(requestedMsg);
+        },
+        onError: error => {
+            console.log('error', error);
+        },
+        onNext: msg => {
+          
+          prices.push(msg.data);
+            processedMsg++;
 
-                if (processedMsg >= requestedMsg) {
-                  // this.requestPriceServerSubscription.request(requestedMsg);
-                  // console.log('REQUEST CHANNEL: INBOUND: ' + requestedMsg + ' message(s) was/were requested by the client');
-                  // processedMsg = 0;
-                  this.requestPriceClientSubscription._subscription.cancel();
-                  this.requestPriceServerSubscription.cancel();
-                  this.setState({ priceInProgress: false });
+            if (processedMsg >= requestedMsg) {
+              this.props.addPrices(prices);
+            }
+        },
+        onComplete: msg => {
+            console.log('REQUEST CHANNEL: INBOUND: stream completed')
+        },
+    });
+  }
+
+  handleRequestImage(itemsForImage) {
+    let index = 0;
+    let requestedMsg = itemsForImage.length;
+    let processedMsg = 0;
+    let cancelled = false;
+    const images = [];
+
+    let flow = new Flowable(subscriber => {
+      this.requestImageClientSubscription = subscriber;
+      this.requestImageClientSubscription.onSubscribe({
+        cancel: () => {
+            cancelled = true;
+        },
+        request: n => {
+          let intervalID = setInterval(() => {
+            if (n > 0 && !cancelled) {
+
+                if (index >= requestedMsg) {
+
+                } else {
+                  const msg = new MessageImage(itemsForImage[index].id);
+                  index++;
+                  subscriber.onNext(msg);
                 }
-            },
-            onComplete: msg => {
-                console.log('REQUEST CHANNEL: INBOUND: stream completed')
-            },
-        });
-    } else {
-        this.requestPriceClientSubscription._subscription.cancel();
-        this.requestPriceServerSubscription.cancel();
-        this.setState({priceInProgress: false});
-        console.log('REQUEST CHANNEL: channel cancelled');
-    }
+                
+                n--;
+            } else {
+                window.clearInterval(intervalID);
+            }
+          }, 10);
+        }
+      });
+    });
+
+    this.client.requestImage(flow).subscribe({
+        onSubscribe: sub => {
+            this.requestImageServerSubscription = sub;
+            this.requestImageServerSubscription.request(requestedMsg);
+        },
+        onError: error => {
+            console.log('error', error);
+        },
+        onNext: msg => {
+          
+          images.push(msg.data);
+            processedMsg++;
+
+            if (processedMsg >= requestedMsg) {
+              this.props.addImages(images);
+            }
+        },
+        onComplete: msg => {
+            console.log('Image completed')
+        },
+    });
   }
 
   fetchMoreData = () => {
@@ -191,9 +222,23 @@ class CatalogPage extends React.Component {
         isLoading={this.state.isLoading}
         items={this.state.items}
         fetchMoreData={this.fetchMoreData}
+        prices={this.props.product.prices}
+        images={this.props.product.images}
       />
     );
   }
 }
 
-export default CatalogPage;
+const mapStateToProps = (state) => ({
+  product: state.product,
+});
+
+const mapDispatchToProps = (dispatch) => {
+  return {
+    addPrices: (items) => dispatch(addPrices(items)),
+    addImages: (items) => dispatch(addImages(items))
+  }
+}
+
+export default connect(mapStateToProps, mapDispatchToProps)(CatalogPage);
+
